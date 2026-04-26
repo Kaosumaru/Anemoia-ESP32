@@ -16,7 +16,7 @@ enum CONTROLLER
 
 extern uint8_t (*_controllerRead)();
 
-void initController();
+void initController(SPIClass *spi);
 uint8_t controllerRead();
 bool isDownPressed(CONTROLLER button);
 

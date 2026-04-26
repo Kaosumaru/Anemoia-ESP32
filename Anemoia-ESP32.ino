@@ -30,9 +30,13 @@ void setup()
 {
     // Turn off Wifi and Bluetooth to reduce CPU overhead
     #ifdef DEBUG
-        Serial.begin(115200);
-        log_pin_config();
+
     #endif
+
+
+    Serial.begin(115200);
+    log_pin_config();
+    Serial.println("Init...");
     
     WiFi.mode(WIFI_OFF);
     esp_wifi_stop();
@@ -47,15 +51,18 @@ void setup()
 
     // Initialize TFT screen
     screen.begin();
-    screen.setRotation(hw_config.rotation);
+    screen.setRotation(3);
     #ifndef DISABLE_DMA
         screen.initDMA();
     #endif
     screen.fillScreen(BG_COLOR);
     screen.startWrite();
 
+    Serial.println("Screen initialized");
+
     if (hw_config.backlight)
     {
+        Serial.println("BL");
         pinMode(TFT_BACKLIGHT_PIN, OUTPUT);
         ledcAttach(TFT_BACKLIGHT_PIN, BL_FREQ, BL_RESOLUTION);
         ledcWrite(TFT_BACKLIGHT_PIN, 255);
@@ -63,10 +70,14 @@ void setup()
 
     // Initialize microsd card
     if(!initSD()) while (true);
+
+    Serial.println("SD initialized");
     ui.initializeSettings();
 
     // Setup buttons
-    initController();
+    initController(&SD_SPI);
+
+    Serial.println("Finished");
 }
 
 void loop() 
@@ -78,6 +89,7 @@ void loop()
     }
 
     invalidCartridge();
+
 }
 
 #ifdef DEBUG
@@ -143,6 +155,8 @@ IRAM_ATTR void emulate()
 
         // Generate one frame
         nes.clock();
+        
+        nes.controller = controllerRead();
 
         #ifdef DEBUG
             current_frame_time = esp_timer_get_time();
@@ -293,7 +307,7 @@ void pollingTask(void* param)
     while (true)
     {
         // Read button input
-        nes->controller = controllerRead();
+        //nes->controller = controllerRead();
 
         vTaskDelayUntil(&lastWakeTime, frameTicks);
     }

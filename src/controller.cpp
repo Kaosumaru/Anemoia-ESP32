@@ -7,6 +7,7 @@
 extern HWConfig hw_config;
 uint8_t (*_controllerRead)() = nullptr;
 
+
 uint8_t controllerRead()
 {
     return _controllerRead();
@@ -230,8 +231,102 @@ static uint8_t PSXControllerRead()
     return state;
 }
 
-void initController()
+SPIClass *_spi = nullptr;
+// MCP23S17 Registers (IOCON.BANK = 0, default)
+#define MCP_IODIRA   0x00  // Direction: Port A (1=input, 0=output)
+#define MCP_IODIRB   0x01  // Direction: Port B
+#define MCP_GPPUA    0x0C  // Pull-up: Port A
+#define MCP_GPPUB    0x0D  // Pull-up: Port B
+#define MCP_GPIOA    0x12  // GPIO read: Port A
+#define MCP_GPIOB    0x13  // GPIO read: Port B
+
+// Opcode: 0b0100[A2][A1][A0][R/W]
+// With hardware address pins A2=A1=A0=0:
+#define MCP_WRITE    0x40
+#define MCP_READ     0x41
+
+// --- Low-level helpers ---
+#define CS_PIN       27    // Chip Select pin
+
+void mcpWrite(uint8_t reg, uint8_t value) {
+  digitalWrite(CS_PIN, LOW);
+  _spi->transfer(MCP_WRITE);
+  _spi->transfer(reg);
+  _spi->transfer(value);
+  digitalWrite(CS_PIN, HIGH);
+}
+
+uint8_t mcpRead(uint8_t reg) {
+  digitalWrite(CS_PIN, LOW);
+  _spi->transfer(MCP_READ);
+  _spi->transfer(reg);
+  uint8_t value = _spi->transfer(0x00);  // dummy byte to clock data out
+  digitalWrite(CS_PIN, HIGH);
+  return value;
+}
+
+static void SPIControllerInit(SPIClass *spi)
 {
+    pinMode(CS_PIN, OUTPUT);
+    digitalWrite(CS_PIN, HIGH);
+    _spi = spi;
+
+  // Set all Port A and B pins as inputs
+  mcpWrite(MCP_IODIRA, 0xFF);  // 0xFF = all inputs
+  mcpWrite(MCP_IODIRB, 0xFF);
+
+  // Enable pull-ups on all Port A and B pins
+  mcpWrite(MCP_GPPUA, 0xFF);   // 0xFF = all pull-ups on
+  mcpWrite(MCP_GPPUB, 0xFF);
+}
+
+static uint8_t SPPIControllerRead()
+{
+    uint8_t state = 0x00;
+    uint8_t portA = ~mcpRead(MCP_GPIOA);
+    uint8_t portB = ~mcpRead(MCP_GPIOB);
+
+    // A
+    // UP 7
+    // DOWN 6
+    // LEFT 3
+    // RIGHT 1
+
+    // B
+    // A 0
+    // B 6
+    // SELECT 3
+    // START 2
+
+    if (portB & (1 << 3)) state |= CONTROLLER::Select;
+    if (portB & (1 << 2)) state |= CONTROLLER::Start;
+    if (portB & (1 << 0)) state |= CONTROLLER::A;
+    if (portB & (1 << 6)) state |= CONTROLLER::B;
+
+    if (portA & (1 << 7)) state |= CONTROLLER::Up;
+    if (portA & (1 << 6)) state |= CONTROLLER::Down;
+    if (portA & (1 << 3)) state |= CONTROLLER::Left;
+    if (portA & (1 << 1)) state |= CONTROLLER::Right;
+
+
+    /*
+    for (int i = 0; i < 8; i++)
+    {
+        bool isPressed = (portA & (1 << i)) || (portB & (1 << i));
+        if (isPressed) {
+            state |= (1 << i);
+        }
+    }*/
+
+    return state;
+}
+
+void initController(SPIClass *spi)
+{
+    SPIControllerInit(spi);
+    _controllerRead = SPPIControllerRead;
+    return;
+
     switch (hw_config.controller_type)
     {
     case 0:
@@ -283,6 +378,11 @@ void initController()
             delayMicroseconds(12);
         }
         _controllerRead = PSXControllerRead;
+        break;
+
+    case 5:
+        SPIControllerInit(spi);
+        _controllerRead = SPPIControllerRead;
         break;
     }
 }
