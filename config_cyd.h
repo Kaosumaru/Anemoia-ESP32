@@ -3,12 +3,12 @@
 
 // Controller Configuration
 // Only NES controller supported for CYD
-#define CONTROLLER_TYPE 1 // 1 = CONTROLLER_NES
+#define CONTROLLER_TYPE 5 // 1 = CONTROLLER_SPI
 
 // Screen Configuration
 #define TFT_BACKLIGHT_ENABLE
 #define TFT_BACKLIGHT_PIN 21
-#define SCREEN_ROTATION 1 // Screen orientation: 1 or 3 (1 = landscape, 3 = landscape flipped)
+#define SCREEN_ROTATION 3 // Screen orientation: 1 or 3 (1 = landscape, 3 = landscape flipped)
 #define SCREEN_SWAP_BYTES
 
 // MicroSD card module Pins
