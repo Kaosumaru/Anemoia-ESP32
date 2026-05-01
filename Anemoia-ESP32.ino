@@ -21,6 +21,8 @@
 #error The optimization flags were not applied! Please refer to *Step 4* of the README how to build and upload section.
 #endif
 
+#define SOUND_EN_PIN     GPIO_NUM_4
+
 HWConfig hw_config;
 TFT_eSPI screen = TFT_eSPI();
 SPIClass SD_SPI(SD_SPI_PORT);
@@ -47,6 +49,7 @@ void setup()
     esp_bt_controller_mem_release(ESP_BT_MODE_BTDM);
 
     hw_config = loadConfig();
+
     setupI2SDAC();
 
     // Initialize TFT screen
@@ -55,10 +58,18 @@ void setup()
     #ifndef DISABLE_DMA
         screen.initDMA();
     #endif
+
+    screen.writecommand(ILI9341_GAMMASET); //Gamma curve selected
+    screen.writedata(2);
+    delay(120);
+    screen.writecommand(ILI9341_GAMMASET); //Gamma curve selected
+    screen.writedata(1);
+
     screen.fillScreen(BG_COLOR);
     screen.startWrite();
 
     Serial.println("Screen initialized");
+
 
     if (hw_config.backlight)
     {
@@ -229,9 +240,13 @@ void invalidCartridge()
     ESP.restart();
 }
 
+#define DMA_BUF_LEN 128
 void setupI2SDAC()
 {
-#if defined(CONFIG_IDF_TARGET_ESP32)
+    // Enable amplifier / sound chip
+    gpio_set_direction(SOUND_EN_PIN, GPIO_MODE_OUTPUT);
+    gpio_set_level(SOUND_EN_PIN, LOW);   // LOW = enable
+
     i2s_config_t i2s_config = {
         .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN),
         .sample_rate = SAMPLE_RATE,
@@ -253,7 +268,9 @@ void setupI2SDAC()
         i2s_set_dac_mode(I2S_DAC_CHANNEL_RIGHT_EN);
     else if (hw_config.dac_pin == 1)
         i2s_set_dac_mode(I2S_DAC_CHANNEL_LEFT_EN);
-#elif defined(CONFIG_IDF_TARGET_ESP32S3)
+
+    Serial.println("I2S initialized on pin\n");
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
     i2s_config_t i2s_config = {
         .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
         .sample_rate = SAMPLE_RATE,
@@ -287,6 +304,7 @@ void setupI2SDAC()
     LOGF("I2S initialized: BCLK=%d, LRC=%d, DOUT=%d\n", I2S_BCLK_PIN, I2S_LRC_PIN, I2S_DOUT_PIN);
 #endif
 }
+
 
 void apuTask(void* param) 
 {
