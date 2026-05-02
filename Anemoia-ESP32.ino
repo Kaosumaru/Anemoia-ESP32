@@ -122,7 +122,7 @@ void loop()
         emulate();
     }
 
-    invalidCartridge();
+    invalidCartridge(cart);
 
 }
 
@@ -246,19 +246,23 @@ bool initSD()
         screen.drawString(txt2, x2, 88, 2);
         screen.drawString(txt3, x3, 120, 2);
         screen.drawString(txt4, x4, 152, 2);
+
+        screen.setTextSize(1);
         return false;
     }
-
+    
     LOG("SD Card initialized.");
     return true;
 }
 
-void invalidCartridge()
+void invalidCartridge(Cartridge* cart)
 {
     screen.fillScreen(BG_COLOR);
     screen.setTextColor(TFT_WHITE);
     screen.setTextDatum(MC_DATUM);
-    screen.drawString("ROM Mapper not supported!", screen.width() / 2, screen.height() / 2, 2);
+    static char buffer[64];
+    sprintf(buffer, "Mapper %d not supported!", cart ? cart->getMapperID() : -1);
+    screen.drawString(buffer, screen.width() / 2, screen.height() / 2, 2);
     delay(3000);
     ESP.restart();
 }

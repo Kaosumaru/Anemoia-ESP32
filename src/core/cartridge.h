@@ -48,6 +48,7 @@ public:
     void dumpState(File& state);
     void loadState(File& state);
     bool isValid();
+    uint8_t getMapperID() const { return mapper_ID; }
 
     uint8_t hardware_mirror;
     uint8_t mirror = HORIZONTAL;
