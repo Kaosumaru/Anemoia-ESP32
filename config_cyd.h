@@ -47,6 +47,9 @@
 
 #define DAC_PIN 1 // 0 = GPIO25, 1 = GPIO26 (CYD uses GPIO26)
 
+#define BATTERY_PORT 34
+#define WAKE_PIN GPIO_NUM_35
+
 #define FRAMESKIP
 // #define DEBUG // Uncomment this line if you want debug prints from serial
 

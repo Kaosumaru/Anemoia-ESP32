@@ -1,26 +1,31 @@
 #include "ui.h"
 
-UI::UI(TFT_eSPI* screen)
-{    
-    this->screen = screen;
+UI::UI(TFT_eSPI* screen):
+    screen(screen),
+    fileList(screen)
+{
+
 }
 
 UI::~UI()
 {
 }
 
+void SleepMode()
+{
+    esp_deep_sleep_start();
+}
+
 Cartridge* UI::selectGame()
 {
     unsigned int last_input_time = 0;
-    constexpr unsigned int delay = 250; 
-    max_items = (screen->height() - 56) / ITEM_HEIGHT;
+    constexpr unsigned int delay = 175; 
 
     drawWindowBox(2, 20, screen->width() - 4, screen->height() - 40);
     drawBars();
     getNesFiles();
-    drawFileList();
+    fileList.Draw();
 
-    const int size = files.size();
     while (true)
     {
         unsigned int now = millis();
@@ -29,59 +34,121 @@ Cartridge* UI::selectGame()
         {
             if (isDownPressed(CONTROLLER::Up)) 
             {
-                selected--;
-                if (selected < 0)
-                {
-                    selected = (size - 1);
-                    scroll_offset = selected - max_items + 1;
-                }
-                else if (selected < scroll_offset) scroll_offset = selected; 
-                if (scroll_offset < 0) scroll_offset = 0;
-                if (scroll_offset > size - 1) scroll_offset = size - 1;
-                drawFileList();
                 last_input_time = now;
+                fileList.SelectionUp();
             }
 
             if (isDownPressed(CONTROLLER::Down)) 
             {
-                selected++; 
-                if (selected > (size - 1))
-                {
-                    selected = 0;
-                    scroll_offset = selected;
-                }
-                else if (selected >= scroll_offset + max_items) scroll_offset = selected - max_items + 1;
-                if (scroll_offset < 0) scroll_offset = 0;
-                if (scroll_offset > size - 1) scroll_offset = size - 1;
-                drawFileList();
                 last_input_time = now;
+                fileList.SelectionDown();
             }
-            
-        }
-        
-        if (isDownPressed(CONTROLLER::A) && (selected >= 0 && selected < size))
-        {
-            std::string game = "/" + files[selected];
-            const char* path = game.c_str();
 
-            std::vector<std::string>().swap(files);
-            return new Cartridge(path);
+            if (isDownPressed(CONTROLLER::Left)) 
+            {
+                last_input_time = now;
+                fileList.SelectionPageUp();
+            }
+
+            if (isDownPressed(CONTROLLER::Right)) 
+            {
+                last_input_time = now;
+                fileList.SelectionPageDown();
+            }
+
+            if (isDownPressed(CONTROLLER::Start)) 
+            {
+                last_input_time = now;
+                SleepMode();
+            }
+
+            if (isDownPressed(CONTROLLER::A))
+            {
+                last_input_time = now;
+
+                FileInfo* selectedFileInfo = fileList.GetSelectedItem();
+                if (!selectedFileInfo) continue;
+
+                Cartridge *selectedCart = selectedFile(*selectedFileInfo);
+
+                if (selectedCart)
+                    return selectedCart;
+                else
+                {
+                    getNesFiles();
+                    fileList.Draw();
+                }
+            }
+
+            if (isDownPressed(CONTROLLER::B))
+            {
+                last_input_time = now;
+                goDirectoryUp();
+                getNesFiles();
+                fileList.Draw();
+            }
         }
+    }
+}
+
+void UI::goDirectoryUp()
+{
+    int last_slash = current_dir.find_last_of('/', current_dir.length() - 2);
+    if (last_slash != std::string::npos)
+    {
+        current_dir = current_dir.substr(0, last_slash + 1);
+    }
+}
+
+Cartridge* UI::selectedFile(const FileInfo& file)
+{
+    if (file.isDirectory)
+    {
+        if (file.name == "..")
+        {
+            goDirectoryUp();
+        }
+        else
+        {
+            current_dir += file.name + "/";
+        }
+
+        return nullptr;
+    }
+    else
+    {
+        std::string game = current_dir + file.name;
+        const char* path = game.c_str();
+
+        return new Cartridge(path);
     }
 }
 
 void UI::getNesFiles()
 {
-    File root = SD.open("/");
+    File root = SD.open(current_dir.c_str());
+    fileList.Clear();
+    
+    if (current_dir != "/")
+    {
+        fileList.AddItem({ true, ".." });
+    }
+
     while (true)
     {
         File file = root.openNextFile();
         if (!file) break;
+
+        std::string filename = file.name();
         if (!file.isDirectory())
         {
-            std::string filename = file.name();
             if (filename.rfind(".nes") == filename.size() - 4)
-                files.push_back(filename);
+                fileList.AddItem({ false, filename });
+        }
+        else
+        {
+            std::string dirname = file.name();
+            fileList.AddItem({ true, dirname });
         }
 
         file.close();
@@ -90,44 +157,6 @@ void UI::getNesFiles()
     root.close();
 }
 
-void UI::drawFileList()
-{
-    if (prev_selected != selected) 
-        screen->fillRect(10, 32, screen->width() - 20, screen->height() - 64, BG_COLOR);
-
-    const int size = files.size();
-    for (int i = 0; i < max_items; i++)
-    {
-        int item = i + scroll_offset;
-        if (item >= size) break;
-
-        std::string file = files[item];
-        int maxWidth = screen->width() - 28;
-        while (screen->textWidth(file.c_str()) > maxWidth)
-        {
-            file.pop_back();
-        }
-        if (file.size() < files[item].size())
-        {
-            file.replace(file.size()-3, 3, "...");
-        }
-
-        const char* filename = file.c_str();
-        int y = i * ITEM_HEIGHT + 32;
-        if (item == selected)
-        {
-            screen->setTextColor(SELECTED_TEXT_COLOR);
-            screen->drawString(filename, 14, y, 1);
-        }
-        else
-        {
-            screen->setTextColor(TEXT_COLOR); 
-            screen->drawString(filename, 14, y, 1);
-        }
-    }
-
-    prev_selected = selected;
-}
 
 void UI::drawWindowBox(int x, int y, int w, int h) 
 {
@@ -194,23 +223,24 @@ void UI::pauseMenu(Bus* nes)
     screen->fillRect(text2_x - 4, 0, screen->textWidth(text2) + 8, 16, SELECTED_BG_COLOR);
     drawText(text2, text2_x, 4);
 
-    constexpr int section_count[] = { 3, 2, 1 };
+    constexpr int section_count[] = { 4, 2, 1 };
     constexpr const char* items[] = 
     { 
-        "Resume", "Settings", "Reset", 
+        "Resume", "Sleep", "Settings", "Reset", 
         "Quick Save State", "Quick Load State", 
-        "Save and Quit" 
+        "Quit" 
     };
     enum ItemSelect
     {
         Resume,
+        Sleep,
         Settings,
         Reset,
         QuickSaveState,
         QuickLoadState,
         SaveAndQuit
     };
-    constexpr int items_y[] = { 28, 40, 52, 72, 84, 102 };
+    constexpr int items_y[] = { 28, 40, 52, 64, 84, 96, 116 };
     constexpr int num_items = sizeof(items) / sizeof(items[0]);
     constexpr int num_sections = sizeof(section_count) / sizeof(section_count[0]);
     constexpr int item_height = 12;
@@ -219,7 +249,7 @@ void UI::pauseMenu(Bus* nes)
 
     // Draw pause window 
     constexpr int window_w = 124;
-    constexpr int window_h = 104;
+    constexpr int window_h = items_y[num_items - 1] + 2;
     int window_x = screen->width() - window_w;
     constexpr int window_y = 16;
     screen->fillRect(window_x, window_y, window_w, window_h, BAR_COLOR);
@@ -274,6 +304,10 @@ void UI::pauseMenu(Bus* nes)
                     screen->fillScreen(TFT_BLACK);
                     screen->startWrite();
                     paused = false;
+                    return;
+                
+                case Sleep:
+                    SleepMode();
                     return;
 
                 case Settings:

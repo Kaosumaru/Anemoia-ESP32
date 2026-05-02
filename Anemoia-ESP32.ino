@@ -35,6 +35,22 @@ void setup()
 
     #endif
 
+    #ifdef WAKE_PIN
+        pinMode(WAKE_PIN, INPUT_PULLUP);
+        esp_sleep_enable_ext0_wakeup(WAKE_PIN, LOW);
+
+        if (esp_reset_reason() == ESP_RST_EXT || esp_reset_reason() == ESP_RST_DEEPSLEEP)
+        {
+            Serial.println("Woke up from deep sleep");
+        }
+        else 
+        {
+            Serial.println("Power on or reset");
+            // go to sleep 
+            if (digitalRead(WAKE_PIN) == HIGH)
+                esp_deep_sleep_start();
+        }
+    #endif
 
     Serial.begin(115200);
     log_pin_config();
@@ -80,7 +96,14 @@ void setup()
     }
 
     // Initialize microsd card
-    if(!initSD()) while (true);
+    
+    while (true)
+    {
+        if(initSD()) 
+            break;
+        if (digitalRead(WAKE_PIN) == LOW)
+            esp_deep_sleep_start();
+    }
 
     Serial.println("SD initialized");
     ui.initializeSettings();

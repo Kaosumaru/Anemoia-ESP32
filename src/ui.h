@@ -6,6 +6,7 @@
 
 #include "controller.h"
 #include "core/bus.h"
+#include "general_list.h"
 #include "hwconfig.h"
 
 #define BL_CHANNEL 0
@@ -23,11 +24,16 @@ extern HWConfig hw_config;
 class UI
 {
 public:
+    struct FileInfo
+    {
+        bool isDirectory;
+        std::string name;
+    };
+
     UI(TFT_eSPI* screen);
     ~UI();
     Cartridge* selectGame();
     void getNesFiles();
-    void drawFileList();
     void drawWindowBox(int x, int y, int w, int h);
     void drawBars();
     void pauseMenu(Bus* nes);
@@ -37,15 +43,18 @@ public:
     bool paused = false;
 
 private:
+    Cartridge* selectedFile(const FileInfo& file);
+
+    void goDirectoryUp();
     void setBrightness(int value);
     void drawText(const char* text, const int x, const int y);
     TFT_eSPI* screen = nullptr;
-    int selected = 0;
-    int prev_selected = 0;
-    int scroll_offset = 0;
-    int max_items = 0;
+
+    // TODO use this
     static constexpr int ITEM_HEIGHT = 12;
-    std::vector<std::string> files;
+
+    GeneralList<FileInfo> fileList;
+    std::string current_dir = "/";
 
     struct Settings
     {
