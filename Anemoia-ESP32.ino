@@ -29,6 +29,9 @@ SPIClass SD_SPI(SD_SPI_PORT);
 UI ui(&screen);
 Cartridge* cart;
 
+StaticTask_t apu_task_handleTCB;
+StackType_t soundStack[1024];
+
 void DeepSleep()
 {
     gpio_set_level(GPIO_NUM_27, 1); // Set CS_PIN high to disable communication with controller
@@ -49,7 +52,7 @@ void setup()
         gpio_hold_dis(GPIO_NUM_27);
         gpio_set_level(GPIO_NUM_27, 1); 
         esp_sleep_enable_ext0_wakeup(WAKE_PIN, LOW);
-
+   /*
         if (esp_reset_reason() == ESP_RST_EXT || esp_reset_reason() == ESP_RST_DEEPSLEEP || esp_reset_reason() == ESP_RST_SW)
         {
             Serial.println("Woke up from deep sleep");
@@ -61,6 +64,7 @@ void setup()
             if (digitalRead(WAKE_PIN) == HIGH)
                 DeepSleep();
         }
+                */
     #endif
 
     Serial.begin(115200);
@@ -158,27 +162,20 @@ IRAM_ATTR void emulate()
     nes.reset();
     ui.loadEmulatorSettings(&nes);
 
-    TaskHandle_t apu_task_handle;
-    xTaskCreatePinnedToCore(
+    TaskHandle_t apu_task_handle = xTaskCreateStaticPinnedToCore(
     apuTask,
     "APU Task",
     1024,
     &nes.cpu.apu,
     1,
-    &apu_task_handle,
+    soundStack,
+    &apu_task_handleTCB,
     0
-    );
+    ); 
 
-    TaskHandle_t polling_task_handle;
-    xTaskCreatePinnedToCore(
-    pollingTask,
-    "Polling Task",
-    1024,
-    &nes,
-    1,
-    &polling_task_handle,
-    0
-    );
+
+    Serial.printf("Free heap: %d bytes\n", esp_get_free_heap_size());
+
     screen.setAddrWindow(32, 0, 256, 240);
 
     #ifdef DEBUG
@@ -197,7 +194,9 @@ IRAM_ATTR void emulate()
             if (!ui.paused)
             {
                 vTaskSuspend(apu_task_handle);
+                
                 ui.pauseMenu(&nes);
+
                 vTaskResume(apu_task_handle);
                 next_frame = esp_timer_get_time() + FRAME_TIME;
                 nes.controller = 0;
@@ -239,7 +238,7 @@ IRAM_ATTR void emulate()
 bool initSD() 
 {
     LOG("Initializing SD...");
-    
+    SD_SPI.begin(SD_SCLK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
     if (!SD.begin(SD_CS_PIN, SD_SPI, hw_config.sd_freq * 1000000)) 
     {
         LOG("SD Card Mount Failed");
@@ -360,20 +359,4 @@ void apuTask(void* param)
     {
         apu->clock();
     }
-}
-
-void pollingTask(void* param)
-{
-    Bus* nes = (Bus*)param;
-    const TickType_t frameTicks = pdMS_TO_TICKS(1000 / 60);
-    TickType_t lastWakeTime = xTaskGetTickCount();
-
-    while (true)
-    {
-        // Read button input
-        //nes->controller = controllerRead();
-
-        vTaskDelayUntil(&lastWakeTime, frameTicks);
-    }
-    
 }

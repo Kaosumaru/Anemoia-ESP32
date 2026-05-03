@@ -24,11 +24,6 @@ extern HWConfig hw_config;
 class UI
 {
 public:
-    struct FileInfo
-    {
-        bool isDirectory;
-        std::string name;
-    };
 
     UI(TFT_eSPI* screen);
     ~UI();
@@ -54,7 +49,7 @@ private:
     // TODO use this
     static constexpr int ITEM_HEIGHT = 12;
 
-    GeneralList<FileInfo> fileList;
+    GeneralList fileList;
     std::string current_dir = "/";
 
     struct Settings

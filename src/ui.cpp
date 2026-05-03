@@ -135,7 +135,7 @@ void UI::getNesFiles()
     
     if (current_dir != "/")
     {
-        fileList.AddItem({ true, ".." });
+        fileList.AddItem(true, std::string{".."});
     }
 
     while (true)
@@ -147,12 +147,12 @@ void UI::getNesFiles()
         if (!file.isDirectory())
         {
             if (filename.rfind(".nes") == filename.size() - 4)
-                fileList.AddItem({ false, filename });
+                fileList.AddItem(false, std::move(filename));
         }
         else
         {
             std::string dirname = file.name();
-            fileList.AddItem({ true, dirname });
+            fileList.AddItem(true, std::move(dirname));
         }
 
         file.close();

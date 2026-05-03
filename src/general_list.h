@@ -4,7 +4,14 @@
 #include <vector>
 #include <TFT_eSPI.h>
 
-template <typename T>
+struct FileInfo
+{
+    std::string name;
+    bool isDirectory;
+};
+
+
+
 class GeneralList
 {
 public:
@@ -13,14 +20,9 @@ public:
         
     }
 
-    void AddItem(const T& item)
+    void AddItem(bool isDirectory, std::string&& name)
     {
-        items.push_back(item);
-    }
-
-    void AddItem(T&& item)
-    {
-        items.push_back(std::move(item));
+        items.emplace_back(std::move(name), isDirectory);
     }
 
     void ClearDisplay()
@@ -64,10 +66,10 @@ public:
                 break;
             }
 
-            const T& fileData = items[item];
+            const FileInfo& fileData = items[item];
 
             // todo remove need for copy
-            std::string label = clipName(fileData.name);
+            const std::string& label = clipName(fileData.name);
 
             
             if (item == selected)
@@ -128,7 +130,7 @@ public:
         return items.empty();
     }
 
-    T* GetSelectedItem()
+    FileInfo* GetSelectedItem()
     {
         if (items.empty()) return nullptr;
         return &items[selected];
@@ -173,23 +175,23 @@ protected:
 
     TFT_eSPI* screen;
 
+    static constexpr int item_height = 12;
+
+    static constexpr int text_margin_x = 4;
+
+    static constexpr int offset_top = 32;
+    static constexpr int offset_bottom = 32;
+    static constexpr int offset_left = 10;
+    static constexpr int offset_right = 10;
+
+    static constexpr int bg_color = 0x0015;
+    static constexpr int text_color = 0xFFFF;
+    static constexpr int selected_text_color = 0x57CA;
+
+    std::vector<FileInfo> items;
     int selected = 0;
     int scroll_offset = 0;
-    int item_height = 12;
     int max_items = 0;
-
-    int text_margin_x = 4;
-
-    int offset_top = 32;
-    int offset_bottom = 32;
-    int offset_left = 10;
-    int offset_right = 10;
-
-    int bg_color = 0x0015;
-    int text_color = 0xFFFF;
-    int selected_text_color = 0x57CA;
-
-    std::vector<T> items;
 };
 
 
