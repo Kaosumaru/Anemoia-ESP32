@@ -28,6 +28,14 @@ TFT_eSPI screen = TFT_eSPI();
 SPIClass SD_SPI(SD_SPI_PORT);
 UI ui(&screen);
 Cartridge* cart;
+
+void DeepSleep()
+{
+    gpio_set_level(GPIO_NUM_27, 1); // Set CS_PIN high to disable communication with controller
+    gpio_hold_en(GPIO_NUM_27);
+    esp_deep_sleep_start();
+}
+
 void setup() 
 {
     // Turn off Wifi and Bluetooth to reduce CPU overhead
@@ -36,10 +44,13 @@ void setup()
     #endif
 
     #ifdef WAKE_PIN
-        pinMode(WAKE_PIN, INPUT_PULLUP);
+        pinMode(WAKE_PIN, INPUT);
+        pinMode(GPIO_NUM_27, OUTPUT);
+        gpio_hold_dis(GPIO_NUM_27);
+        gpio_set_level(GPIO_NUM_27, 1); 
         esp_sleep_enable_ext0_wakeup(WAKE_PIN, LOW);
 
-        if (esp_reset_reason() == ESP_RST_EXT || esp_reset_reason() == ESP_RST_DEEPSLEEP)
+        if (esp_reset_reason() == ESP_RST_EXT || esp_reset_reason() == ESP_RST_DEEPSLEEP || esp_reset_reason() == ESP_RST_SW)
         {
             Serial.println("Woke up from deep sleep");
         }
@@ -48,7 +59,7 @@ void setup()
             Serial.println("Power on or reset");
             // go to sleep 
             if (digitalRead(WAKE_PIN) == HIGH)
-                esp_deep_sleep_start();
+                DeepSleep();
         }
     #endif
 
@@ -75,11 +86,6 @@ void setup()
         screen.initDMA();
     #endif
 
-    screen.writecommand(ILI9341_GAMMASET); //Gamma curve selected
-    screen.writedata(2);
-    delay(120);
-    screen.writecommand(ILI9341_GAMMASET); //Gamma curve selected
-    screen.writedata(1);
 
     screen.fillScreen(BG_COLOR);
     screen.startWrite();
@@ -95,6 +101,19 @@ void setup()
         ledcWrite(TFT_BACKLIGHT_PIN, 255);
     }
 
+    // init SPI
+    SD_SPI.begin(SD_SCLK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
+    // Setup buttons
+    // that is done before, so we are initializing MCP with pullups, case we want to read WAKE_PIN
+    initController(&SD_SPI);
+
+    screen.writecommand(ILI9341_GAMMASET); //Gamma curve selected
+    screen.writedata(2);
+    delay(120);
+    screen.writecommand(ILI9341_GAMMASET); //Gamma curve selected
+    screen.writedata(1);
+
+
     // Initialize microsd card
     
     while (true)
@@ -102,14 +121,13 @@ void setup()
         if(initSD()) 
             break;
         if (digitalRead(WAKE_PIN) == LOW)
-            esp_deep_sleep_start();
+            DeepSleep();
     }
 
     Serial.println("SD initialized");
     ui.initializeSettings();
 
-    // Setup buttons
-    initController(&SD_SPI);
+
 
     Serial.println("Finished");
 }
@@ -221,7 +239,7 @@ IRAM_ATTR void emulate()
 bool initSD() 
 {
     LOG("Initializing SD...");
-    SD_SPI.begin(SD_SCLK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
+    
     if (!SD.begin(SD_CS_PIN, SD_SPI, hw_config.sd_freq * 1000000)) 
     {
         LOG("SD Card Mount Failed");
@@ -247,10 +265,11 @@ bool initSD()
         screen.drawString(txt3, x3, 120, 2);
         screen.drawString(txt4, x4, 152, 2);
 
-        screen.setTextSize(1);
+
         return false;
     }
-    
+
+    screen.setTextSize(1);
     LOG("SD Card initialized.");
     return true;
 }

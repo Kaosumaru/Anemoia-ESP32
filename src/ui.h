@@ -43,6 +43,7 @@ public:
     bool paused = false;
 
 private:
+    void SleepMode();
     Cartridge* selectedFile(const FileInfo& file);
 
     void goDirectoryUp();

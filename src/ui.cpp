@@ -11,8 +11,10 @@ UI::~UI()
 {
 }
 
-void SleepMode()
+void UI::SleepMode()
 {
+    gpio_set_level(GPIO_NUM_27, 1); // Set CS_PIN high to disable communication with controller
+    gpio_hold_en(GPIO_NUM_27);
     esp_deep_sleep_start();
 }
 
@@ -56,12 +58,6 @@ Cartridge* UI::selectGame()
                 fileList.SelectionPageDown();
             }
 
-            if (isDownPressed(CONTROLLER::Start)) 
-            {
-                last_input_time = now;
-                SleepMode();
-            }
-
             if (isDownPressed(CONTROLLER::A))
             {
                 last_input_time = now;
@@ -83,9 +79,17 @@ Cartridge* UI::selectGame()
             if (isDownPressed(CONTROLLER::B))
             {
                 last_input_time = now;
-                goDirectoryUp();
-                getNesFiles();
-                fileList.Draw();
+                if (current_dir != "/")
+                {
+                    goDirectoryUp();
+                    getNesFiles();
+                    fileList.Draw();
+                }
+                else
+                {
+                    last_input_time = now;
+                    SleepMode();
+                }
             }
         }
     }
