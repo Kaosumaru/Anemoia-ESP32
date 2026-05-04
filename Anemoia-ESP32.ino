@@ -29,9 +29,6 @@ SPIClass SD_SPI(SD_SPI_PORT);
 UI ui(&screen);
 Cartridge* cart;
 
-StaticTask_t apu_task_handleTCB;
-StackType_t soundStack[1024];
-
 void DeepSleep()
 {
     gpio_set_level(GPIO_NUM_27, 1); // Set CS_PIN high to disable communication with controller
@@ -52,19 +49,17 @@ void setup()
         gpio_hold_dis(GPIO_NUM_27);
         gpio_set_level(GPIO_NUM_27, 1); 
         esp_sleep_enable_ext0_wakeup(WAKE_PIN, LOW);
-   /*
+
         if (esp_reset_reason() == ESP_RST_EXT || esp_reset_reason() == ESP_RST_DEEPSLEEP || esp_reset_reason() == ESP_RST_SW)
         {
-            Serial.println("Woke up from deep sleep");
+            LOG("Woke up from deep sleep");
         }
         else 
         {
-            Serial.println("Power on or reset");
-            // go to sleep 
-            if (digitalRead(WAKE_PIN) == HIGH)
-                DeepSleep();
+            LOG("Power on or reset");
+            DeepSleep(); 
         }
-                */
+
     #endif
 
     Serial.begin(115200);
@@ -93,9 +88,6 @@ void setup()
 
     screen.fillScreen(BG_COLOR);
     screen.startWrite();
-
-    Serial.println("Screen initialized");
-
 
     if (hw_config.backlight)
     {
@@ -128,12 +120,7 @@ void setup()
             DeepSleep();
     }
 
-    Serial.println("SD initialized");
     ui.initializeSettings();
-
-
-
-    Serial.println("Finished");
 }
 
 void loop() 
@@ -162,19 +149,19 @@ IRAM_ATTR void emulate()
     nes.reset();
     ui.loadEmulatorSettings(&nes);
 
-    TaskHandle_t apu_task_handle = xTaskCreateStaticPinnedToCore(
+    TaskHandle_t apu_task_handle = nullptr;
+    xTaskCreatePinnedToCore(
     apuTask,
     "APU Task",
-    1024,
+    800,
     &nes.cpu.apu,
     1,
-    soundStack,
-    &apu_task_handleTCB,
+    &apu_task_handle,
     0
-    ); 
+    );
 
 
-    Serial.printf("Free heap: %d bytes\n", esp_get_free_heap_size());
+    LOGF("Free heap: %d bytes\n", esp_get_free_heap_size());
 
     screen.setAddrWindow(32, 0, 256, 240);
 
@@ -193,11 +180,13 @@ IRAM_ATTR void emulate()
         {
             if (!ui.paused)
             {
+                if (apu_task_handle)
                 vTaskSuspend(apu_task_handle);
                 
                 ui.pauseMenu(&nes);
 
-                vTaskResume(apu_task_handle);
+                if (apu_task_handle)
+                    vTaskResume(apu_task_handle);
                 next_frame = esp_timer_get_time() + FRAME_TIME;
                 nes.controller = 0;
                 screen.setAddrWindow(32, 0, 256, 240);
@@ -313,8 +302,6 @@ void setupI2SDAC()
         i2s_set_dac_mode(I2S_DAC_CHANNEL_RIGHT_EN);
     else if (hw_config.dac_pin == 1)
         i2s_set_dac_mode(I2S_DAC_CHANNEL_LEFT_EN);
-
-    Serial.println("I2S initialized on pin\n");
 #if defined(CONFIG_IDF_TARGET_ESP32S3)
     i2s_config_t i2s_config = {
         .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),

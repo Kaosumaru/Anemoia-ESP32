@@ -68,7 +68,6 @@ public:
 
             const FileInfo& fileData = items[item];
 
-            // todo remove need for copy
             const std::string& label = clipName(fileData.name);
 
             
@@ -100,6 +99,14 @@ public:
     void Clear()
     {
         items.clear();
+        selected = 0;
+        scroll_offset = 0;
+        ClearDisplay();
+    }
+
+    void Purge()
+    {
+        std::vector<FileInfo>().swap(items);
         selected = 0;
         scroll_offset = 0;
         ClearDisplay();

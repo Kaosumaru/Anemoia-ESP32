@@ -67,6 +67,7 @@ Cartridge* UI::selectGame()
 
                 Cartridge *selectedCart = selectedFile(*selectedFileInfo);
 
+                fileList.Purge();
                 if (selectedCart)
                     return selectedCart;
                 else
