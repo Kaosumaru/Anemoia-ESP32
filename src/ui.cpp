@@ -1,10 +1,14 @@
 #include "ui.h"
+#include "driver/adc.h" 
+
+#define BAT_ADC_CHANNEL ADC1_CHANNEL_6
 
 UI::UI(TFT_eSPI* screen):
     screen(screen),
     fileList(screen)
 {
-
+    adc1_config_width(ADC_WIDTH_BIT_12);                          // 0–4095
+    adc1_config_channel_atten(BAT_ADC_CHANNEL, ADC_ATTEN_DB_12);  // GPIO34, 0–3.3V
 }
 
 UI::~UI()
@@ -28,8 +32,10 @@ Cartridge* UI::selectGame()
     getNesFiles();
     fileList.Draw();
 
+    last_battery_state = -1;
     while (true)
     {
+        updateBatteryStatus();
         unsigned int now = millis();
 
         if (now - last_input_time > delay)
@@ -60,7 +66,8 @@ Cartridge* UI::selectGame()
 
             if (isDownPressed(CONTROLLER::A))
             {
-                last_input_time = now;
+                // Add extra delay after selecting a file to prevent accidental double selection
+                last_input_time = now + delay;
 
                 FileInfo* selectedFileInfo = fileList.GetSelectedItem();
                 if (!selectedFileInfo) continue;
@@ -94,6 +101,42 @@ Cartridge* UI::selectGame()
             }
         }
     }
+}
+
+void UI::updateBatteryStatus()
+{
+    int BAT_ADC = 34;
+    unsigned char battery_percent = -1;
+
+    // --- Reading battery voltage (call whenever needed) ---
+    int raw = adc1_get_raw(BAT_ADC_CHANNEL);
+    float adc_value = (raw / 4095.0) * 6.6f; // voltage divider compensation
+
+
+    constexpr float voltage_values[] = {4.20f, 4.10f, 4.03f, 3.96f, 3.89f, 3.82f, 3.75f, 3.68f, 3.61f, 3.55f};
+    constexpr unsigned char battery_states[] = {100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0};
+
+    for (size_t i = 0; i < sizeof(voltage_values) / sizeof(voltage_values[0]); i++)
+    {
+        if (adc_value > voltage_values[i])
+        {
+            battery_percent = battery_states[i];
+            break;
+        }
+    }
+    
+    // Serial.printf("Battery reading: %d, voltage: %.2f V, percent: %d%%\n", raw, adc_value, battery_percent);
+
+    if (last_battery_state == battery_percent)
+        return;
+    last_battery_state = battery_percent;
+
+    char battery_text[5];
+    snprintf(battery_text, sizeof(battery_text), "%3d%%", battery_percent);
+    screen->setTextColor(TEXT2_COLOR, BAR_COLOR);
+    int x = screen->width() - screen->textWidth(battery_text) - 4;
+    screen->setCursor(x, screen->height() - 12);
+    screen->print(battery_text);
 }
 
 void UI::goDirectoryUp()
@@ -216,6 +259,7 @@ void UI::pauseMenu(Bus* nes)
     static const uint8_t padding[128] = {0};
 
     paused = true;
+    last_battery_state = -1;
     int prev_select = 0;
     int select = 0;
 
@@ -279,11 +323,12 @@ void UI::pauseMenu(Bus* nes)
         drawText(items[i], window_x + 12, y);
     }
 
-    constexpr int initial_delay = 500;
+    constexpr int delay = 175; 
+    constexpr int initial_delay = delay;
     int last_input_time = millis() + initial_delay;
     while (true)
     {
-        constexpr int delay = 250; 
+        updateBatteryStatus();
         int now = millis();
         if (now - last_input_time > delay)
         {
@@ -466,6 +511,7 @@ void UI::settingsMenu(Bus* nes)
     int last_input_time = millis() + initial_delay;
     while (true)
     {
+        updateBatteryStatus();
         constexpr int delay = 250; 
         int now = millis();
         if (now - last_input_time > delay)

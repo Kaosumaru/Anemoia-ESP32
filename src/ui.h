@@ -44,6 +44,8 @@ private:
     void goDirectoryUp();
     void setBrightness(int value);
     void drawText(const char* text, const int x, const int y);
+
+    void updateBatteryStatus();
     TFT_eSPI* screen = nullptr;
 
     // TODO use this
@@ -61,6 +63,8 @@ private:
     Settings settings;
     void saveSettings(const Settings* s);
     void loadSettings(Settings* s);
+
+    unsigned char last_battery_state = -1;
 };
 
 #endif
