@@ -176,7 +176,7 @@ IRAM_ATTR void Bus::NMI()
     cpu.NMI();
 }
 
-void Bus::saveState()
+void Bus::saveState(const char* postFix)
 {
     if (!SD.exists("/states")) SD.mkdir("/states");
     uint32_t CRC32 = cart->CRC32;
@@ -185,7 +185,7 @@ void Bus::saveState()
     sprintf(CRC32_str, "%08lX", (unsigned long)CRC32);
 
     char filename[32];
-    sprintf(filename, "/states/%s.state", CRC32_str);
+    sprintf(filename, "/states/%s%s.state", CRC32_str, postFix);
 
     File state = SD.open(filename, FILE_WRITE);
     if (!state) return;
@@ -203,7 +203,7 @@ void Bus::saveState()
     state.close();
 }
 
-void Bus::loadState()
+void Bus::loadState(const char* postFix)
 {
     uint32_t CRC32 = cart->CRC32;
 
@@ -211,7 +211,7 @@ void Bus::loadState()
     sprintf(CRC32_str, "%08lX", (unsigned long)CRC32);
 
     char filename[32];
-    sprintf(filename, "/states/%s.state", CRC32_str);
+    sprintf(filename, "/states/%s%s.state", CRC32_str, postFix);
     if (!SD.exists(filename)) return;
 
     File state = SD.open(filename, FILE_READ);

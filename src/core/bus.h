@@ -39,8 +39,8 @@ public:
     uint16_t ppu_scanline = 0;
     void renderImage(uint16_t scanline);
 
-    void saveState();
-    void loadState();
+    void saveState(const char* postFix = "");
+    void loadState(const char* postFix = "");
 
 private:
     void cpuClock();

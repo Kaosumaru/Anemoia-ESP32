@@ -123,12 +123,15 @@ void setup()
     ui.initializeSettings();
 }
 
+IRAM_ATTR void emulate(bool loadAfterSleep = false);
+
 void loop() 
 {
+    bool loadAfterSleep = ui.tryToLoadAfterSleep();
     cart = ui.selectGame();
     if (cart && cart->isValid())
     {
-        emulate();
+        emulate(loadAfterSleep);
     }
 
     invalidCartridge(cart);
@@ -141,13 +144,16 @@ void loop()
     unsigned long total_frame_time = 0;
     unsigned long frame_count = 0;
 #endif
-IRAM_ATTR void emulate()
+IRAM_ATTR void emulate(bool loadAfterSleep)
 {
     Bus nes;
     nes.insertCartridge(cart);
     nes.connectScreen(&screen);
     nes.reset();
     ui.loadEmulatorSettings(&nes);
+
+    if (loadAfterSleep)
+        nes.loadState("_sleep");
 
     TaskHandle_t apu_task_handle = nullptr;
     xTaskCreatePinnedToCore(

@@ -37,8 +37,9 @@ public:
     void loadEmulatorSettings(Bus* nes);
     bool paused = false;
 
+    bool tryToLoadAfterSleep();
 private:
-    void SleepMode();
+    void SleepMode(Bus* nes);
     Cartridge* selectedFile(const FileInfo& file);
 
     void goDirectoryUp();

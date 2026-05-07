@@ -3,6 +3,9 @@
 
 #define BAT_ADC_CHANNEL ADC1_CHANNEL_6
 
+RTC_DATA_ATTR char romToLoad[128] = {0}; // Store the ROM filename to load after deep sleep wakeup/reset
+RTC_DATA_ATTR bool reloadFromSleep = false; // Flag to indicate if we should reload the ROM after waking up from deep sleep
+
 UI::UI(TFT_eSPI* screen):
     screen(screen),
     fileList(screen)
@@ -15,17 +18,36 @@ UI::~UI()
 {
 }
 
-void UI::SleepMode()
+void UI::SleepMode(Bus* nes)
 {
+    if (nes)
+    {
+        reloadFromSleep = true;
+        nes->saveState("_sleep");
+    }
+
     gpio_set_level(GPIO_NUM_27, 1); // Set CS_PIN high to disable communication with controller
     gpio_hold_en(GPIO_NUM_27);
     esp_deep_sleep_start();
+}
+
+bool UI::tryToLoadAfterSleep()
+{
+    return reloadFromSleep;
 }
 
 Cartridge* UI::selectGame()
 {
     unsigned int last_input_time = 0;
     constexpr unsigned int delay = 175; 
+
+    if (reloadFromSleep)
+    {
+        reloadFromSleep = false;
+        Cartridge* cart = new Cartridge(romToLoad);
+        if (cart->isValid())
+            return cart;
+    }
 
     drawWindowBox(2, 20, screen->width() - 4, screen->height() - 40);
     drawBars();
@@ -38,7 +60,7 @@ Cartridge* UI::selectGame()
         updateBatteryStatus();
         unsigned int now = millis();
 
-        if (now - last_input_time > delay)
+        if (last_input_time < now && now - last_input_time > delay)
         {
             if (isDownPressed(CONTROLLER::Up)) 
             {
@@ -96,7 +118,7 @@ Cartridge* UI::selectGame()
                 else
                 {
                     last_input_time = now;
-                    SleepMode();
+                    SleepMode(nullptr);
                 }
             }
         }
@@ -168,6 +190,7 @@ Cartridge* UI::selectedFile(const FileInfo& file)
         std::string game = current_dir + file.name;
         const char* path = game.c_str();
 
+        strncpy(romToLoad, path, sizeof(romToLoad) - 1); // Store the selected ROM filename for deep sleep wakeup
         return new Cartridge(path);
     }
 }
@@ -357,7 +380,7 @@ void UI::pauseMenu(Bus* nes)
                     return;
                 
                 case Sleep:
-                    SleepMode();
+                    SleepMode(nes);
                     return;
 
                 case Settings:
